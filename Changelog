@@ -1,2 +1,8 @@
+0.02
+	interactive command errors now lead to abort of
+	inspect() if reading from STDIN.
+
+	fixed "get struct"
+	
 0.01
 	initial commit

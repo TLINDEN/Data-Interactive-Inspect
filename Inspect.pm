@@ -19,7 +19,7 @@ use strict;
 use warnings;
 no strict 'refs';
 
-$Data::Interactive::Inspect::VERSION = 0.01;
+$Data::Interactive::Inspect::VERSION = 0.02;
 
 use vars qw(@ISA);
 
@@ -133,10 +133,10 @@ sub inspect {
   my ($self, $__cmds) = @_;
 
   if ($__cmds) {
-    # unit tests
+    # unit tests und scripts
     $self->{silent} = 1;
     foreach (split /\n/, $__cmds) {
-      if (! $self->process($_) ) {
+      if (! $self->process($_, 1) ) {
 	last;
       }
     }
@@ -168,7 +168,7 @@ sub inspect {
   }
   else {
     while (<STDIN>) {
-      if (! $self->process($_) ) {
+      if (! $self->process($_, 1) ) {
 	last;
       }
     }
@@ -249,10 +249,11 @@ sub complete {
 }
 
 sub process {
-  my ($self, $line) = @_;
+  my ($self, $line, $failonerr) = @_;
 
   return 1 if(!defined $line);
 
+  my $r;
   my ($cmd, @args) = split /\s\s*/, $line;
 
   return 1 if (!defined $cmd);
@@ -271,14 +272,17 @@ sub process {
       if (! grep {$cmd eq $_} @{$self->{commandargs}}) {
 	@args = ();
       }
-      $self->$func(@args);
+      $r = $self->$func(@args);
+      return 0 if($failonerr && !$r); # fail if not interactive
     }
     else {
       if (exists $self->{db}->{$cmd}) {
-	$self->enter($cmd);
+	$r = $self->enter($cmd);
+	return 0 if($failonerr && !$r); # fail if not interactive
       }
       else {
 	print STDERR "no such command: $cmd\n";
+	return 0 if $failonerr;
       }
     }
   }
@@ -290,11 +294,16 @@ sub process {
 # command implementations
 sub __interactive__ {};
 
+sub fail {
+  my ($self, $msg) = @_;
+  print STDERR $msg;
+  return 0;
+}
+
 sub set {
   my($self, $key, @value) = @_;
   if (!$key) {
-    print STDERR "<key> parameter missing\n";
-    return;
+    return $self->fail("<key> parameter missing\n");
   }
 
   my $var;
@@ -305,25 +314,24 @@ sub set {
     eval $code;
   }
   if ($@) {
-    print STDERR "failed to insert: $@\n";
+    return $self->fail("failed to insert: $@\n");
   }
   else {
     $self->{db}->{$key} = $var;
     $self->done;
   }
+  return 1;
 }
 
 sub append {
   my($self, $key, @value) = @_;
   if (!$key) {
-    print STDERR "<key> parameter missing\n";
-    return;
+    return $self->fail("<key> parameter missing\n");
   }
 
   if (exists $self->{db}->{$key}) {
     if (ref($self->{db}->{$key}) !~ /array/i) {
-      print STDERR "\"$key\" already exists and is not an array\n";
-      return;
+      return $self->fail("\"$key\" already exists and is not an array\n");
     }
   }
 
@@ -331,19 +339,20 @@ sub append {
   my $code = "\$var = @value;";
   eval $code;
   if ($@) {
-    print STDERR "failed to insert: $@\n";
+    return $self->fail("failed to insert: $@\n");
   }
   else {
     push @{$self->{db}->{$key}}, $var;
     $self->done;
   }
+
+  return 1;
 }
 
 sub drop {
   my($self, $key) = @_;
   if (!$key) {
-    print STDERR "<key> parameter missing\n";
-    return;
+    return $self->fail("<key> parameter missing\n");
   }
 
   if (exists $self->{db}->{$key}) {
@@ -351,49 +360,50 @@ sub drop {
     $self->done;
   }
   else {
-    print STDERR "no such key: \"$key\"\n";
+    return $self->fail("no such key: \"$key\"\n");
   }
+
+  return 1;
 }
 
 sub mypop {
   my($self, $key) = @_;
   if (!$key) {
-    print STDERR "<key> parameter missing\n";
-    return;
+    return $self->fail("<key> parameter missing\n");
   }
 
   if (exists $self->{db}->{$key}) {
     if (ref($self->{db}->{$key}) !~ /array/i) {
-      print STDERR "\"$key\" is not an array\n";
-      return;
+      return $self->fail("\"$key\" is not an array\n");
     }
   }
   my $ignore = pop @{$self->{db}->{$key}};
   $self->done;
+
+  return 1;
 }
 
 sub myshift {
   my($self, $key) = @_;
   if (!$key) {
-    print STDERR "<key> parameter missing\n";
-    return;
+    return $self->fail("<key> parameter missing\n");
   }
 
   if (exists $self->{db}->{$key}) {
     if (ref($self->{db}->{$key}) !~ /array/i) {
-      print STDERR "\"$key\" is not an array\n";
-      return;
+      return $self->fail("\"$key\" is not an array\n");
     }
   }
   my $ignore = shift @{$self->{db}->{$key}};
   $self->done;
+
+  return 1;
 }
 
 sub get {
   my($self, $key, $search) = @_;
   if (!$key) {
-    print STDERR "<key> parameter missing\n";
-    return;
+    return $self->fail("<key> parameter missing\n");
   }
 
   my $out;
@@ -413,21 +423,22 @@ sub get {
       push @K, $key;
     }
     else {
-      print STDERR "no such key: \"$key\"\n";
-      return;
+      return $self->fail("no such key: \"$key\"\n");
     }
   }
 
   foreach my $key (@K) {
     if (ref($self->{db}->{$key}) =~ /hash/i || ref($self->{db}->{$key}) =~ /array/i) {
       # FIXME: something nicer
-      $out .= "$key =>\n" . &dump($self->{db}->{$key}, 1)
+      $out .= "$key =>\n" . $self->dump($self->{db}->{$key}, 1)
     }
     else {
       $out .= "$key => \"$self->{db}->{$key}\"\n";
     }
   }
   print $out;
+
+  return 1;
 }
 
 sub dump {
@@ -452,13 +463,14 @@ sub dump {
       print $out;
     }
   }
+
+  return 1;
 }
 
 sub edit {
   my ($self, $key) = @_;
   if (!$key) {
-    print STDERR "<key> parameter missing\n";
-    return;
+    return $self->fail("<key> parameter missing\n");
   }
 
   if (exists $self->{db}->{$key}) {
@@ -480,7 +492,7 @@ sub edit {
 	$perl = YAML::Load($newdata);
       };
       if ($@) {
-	print STDERR "$@\n";
+	return $self->fail("$@\n");
       }
       else {
 	$self->{db}->{$key} = $perl;
@@ -490,14 +502,18 @@ sub edit {
     unlink($filename);
   }
   else {
-    print STDERR "no such key: \"$key\"\n";
+    return $self->fail("no such key: \"$key\"\n");
   }
+
+  return 1;
 }
 
 sub list {
   my $self = shift;
   print join "\n", sort keys %{$self->{db}};
   print "\n";
+
+  return 1;
 }
 
 sub show {
@@ -514,13 +530,14 @@ sub show {
       print "\"$self->{db}->{$key}\"\n";
     }
   }
+
+  return 1;
 }
 
 sub enter {
   my ($self, $key) = @_;
   if (!$key) {
-    print STDERR "<key> parameter missing\n";
-    return;
+    return $self->fail("<key> parameter missing\n");
   }
 
   if ($key eq '..') {
@@ -536,13 +553,15 @@ sub enter {
 	print "=> $key\n";
       }
       else {
-	print STDERR "not a hash: \"$key\"\n";
+	return $self->fail("not a hash: \"$key\"\n");
       }
     }
     else {
-      print STDERR "unknown command \"$key\"\n";
+      return $self->fail("unknown command \"$key\"\n");
     }
   }
+
+  return 1;
 }
 
 sub up {
@@ -553,8 +572,10 @@ sub up {
     print "<=\n";
   }
   else {
-    print STDERR "already on top level\n";
+    return $self->fail("already on top level\n");
   }
+
+  return 1;
 }
 
 sub done {
@@ -925,6 +946,6 @@ and/or modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-This is the manual page for L<Data::Interactive::Inspect> Version 0.01.
+This is the manual page for L<Data::Interactive::Inspect> Version 0.02.
 
 =cut
