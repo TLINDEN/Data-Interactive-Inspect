@@ -13,9 +13,7 @@ WriteMakefile(
 	      VERSION_FROM => 'Inspect.pm',
               ABSTRACT     => 'Inspect and manipulate perl data structures interactively',
               LICENSE      => 'perl',
-              AUTHOR       => [
-                'Thomas v.Dein <tlinden@cpan.org>',
-              ],
+              AUTHOR       => 'Thomas v.Dein <tlinden@cpan.org>',
 	      clean        => { FILES => '*~ */*~' },
 	      PREREQ_PM    => { 
 			       'YAML'      => 0,

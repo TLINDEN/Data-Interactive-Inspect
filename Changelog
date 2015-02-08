@@ -1,8 +1,17 @@
+0.03
+	re-factored error handling a little
+
+	add 'search' command (alias: /<regex>)
+
+	added [de]serialize methods, which can be overwritten,
+	by default we use YAML for serialization, but this
+	can be changed.
+
 0.02
 	interactive command errors now lead to abort of
 	inspect() if reading from STDIN.
 
 	fixed "get struct"
-	
+
 0.01
 	initial commit

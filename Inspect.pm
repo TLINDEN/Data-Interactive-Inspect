@@ -19,7 +19,9 @@ use strict;
 use warnings;
 no strict 'refs';
 
-$Data::Interactive::Inspect::VERSION = 0.02;
+use Data::Dumper;
+
+$Data::Interactive::Inspect::VERSION = 0.03;
 
 use vars qw(@ISA);
 
@@ -37,15 +39,17 @@ sub new {
 
   # defaults (= valid parameters)
   my $self = {
-	      name     => '',
-	      begin    => sub { print STDERR "unsupported\n"; },
-	      commit   => sub { print STDERR "unsupported\n"; },
-	      rollback => sub { print STDERR "unsupported\n"; },
-	      export   => sub { my ($db) = @_; return $db; },
-	      struct   => {},
-	      editor   => 'vi',
-	      more     => 'more',
-	      silent   => 0,
+	      name        => '',
+	      begin       => sub { print STDERR "unsupported\n"; },
+	      commit      => sub { print STDERR "unsupported\n"; },
+	      rollback    => sub { print STDERR "unsupported\n"; },
+	      export      => sub { my ($db) = @_; return $db; },
+	      serialize   => sub { my $db = shift; return YAML::Dump($db); },
+	      deserialize => sub { my $db = shift; return YAML::Load($db); },
+	      struct      => {},
+	      editor      => 'vi',
+	      more        => 'more',
+	      silent      => 0,
 	     };
 
   bless $self, $class;
@@ -95,9 +99,13 @@ sub new {
 		      drop  => 'drop',
 		      pop   => 'mypop',
 		      shift => 'myshift',
+		      search=> 'search',
+		      '/'   => 'search',
 		      help  => 'help',
 		      h     => 'help',
 		      '?'   => 'help',
+		      quit  => 'quit',
+		      q     => 'quit',
 		     };
 
   if ($self->{transactions}) {
@@ -112,7 +120,7 @@ sub new {
   }
 
   # map which commands take a key param
-  $self->{commandargs} = [qw(get set edit show append pop shift drop enter cd)];
+  $self->{commandargs} = [qw(get set edit show append pop shift drop enter cd search /)];
 
   # holds current level
   $self->{db} = $self->{struct};
@@ -253,6 +261,9 @@ sub process {
 
   return 1 if(!defined $line);
 
+  # special treatment to search command
+  $line =~ s|^/(.+)|/ $1|;
+
   my $r;
   my ($cmd, @args) = split /\s\s*/, $line;
 
@@ -260,11 +271,10 @@ sub process {
   return 1 if ($cmd =~ /^\s*$/);
   return 1 if ($cmd =~ /^#/);
 
+
+
   if ($cmd eq '..') {
     $self->up;
-  }
-  elsif ($cmd eq 'quit') {
-    return 0;
   }
   else {
     if (exists $self->{command}->{$cmd}) {
@@ -276,9 +286,15 @@ sub process {
       return 0 if($failonerr && !$r); # fail if not interactive
     }
     else {
-      if (exists $self->{db}->{$cmd}) {
-	$r = $self->enter($cmd);
-	return 0 if($failonerr && !$r); # fail if not interactive
+      if (ref($self->{db}) =~ /hash/i) {
+	if (exists $self->{db}->{$cmd}) {
+	  $r = $self->enter($cmd);
+	  return 0 if($failonerr && !$r); # fail if not interactive
+	}
+	else {
+	  print STDERR "no such command: $cmd\n";
+	  return 0 if $failonerr;
+	}
       }
       else {
 	print STDERR "no such command: $cmd\n";
@@ -294,17 +310,25 @@ sub process {
 # command implementations
 sub __interactive__ {};
 
-sub fail {
+sub _fail {
   my ($self, $msg) = @_;
   print STDERR $msg;
   return 0;
 }
 
+sub _failkey {
+  my $self = shift;
+  return $self->_fail("<key> parameter missing\n");
+}
+
+sub quit {
+  exit;
+}
+
 sub set {
   my($self, $key, @value) = @_;
-  if (!$key) {
-    return $self->fail("<key> parameter missing\n");
-  }
+
+  return $self->_failkey() if(! defined $key);
 
   my $var;
   my $code = "\$var = @value;";
@@ -314,7 +338,7 @@ sub set {
     eval $code;
   }
   if ($@) {
-    return $self->fail("failed to insert: $@\n");
+    return $self->_fail("failed to insert: $@\n");
   }
   else {
     $self->{db}->{$key} = $var;
@@ -325,13 +349,12 @@ sub set {
 
 sub append {
   my($self, $key, @value) = @_;
-  if (!$key) {
-    return $self->fail("<key> parameter missing\n");
-  }
+
+  return $self->_failkey() if(! defined $key);
 
   if (exists $self->{db}->{$key}) {
     if (ref($self->{db}->{$key}) !~ /array/i) {
-      return $self->fail("\"$key\" already exists and is not an array\n");
+      return $self->_fail("\"$key\" already exists and is not an array\n");
     }
   }
 
@@ -339,7 +362,7 @@ sub append {
   my $code = "\$var = @value;";
   eval $code;
   if ($@) {
-    return $self->fail("failed to insert: $@\n");
+    return $self->_fail("failed to insert: $@\n");
   }
   else {
     push @{$self->{db}->{$key}}, $var;
@@ -351,16 +374,15 @@ sub append {
 
 sub drop {
   my($self, $key) = @_;
-  if (!$key) {
-    return $self->fail("<key> parameter missing\n");
-  }
+
+  return $self->_failkey() if(! defined $key);
 
   if (exists $self->{db}->{$key}) {
     delete $self->{db}->{$key};
     $self->done;
   }
   else {
-    return $self->fail("no such key: \"$key\"\n");
+    return $self->_fail("no such key: \"$key\"\n");
   }
 
   return 1;
@@ -368,13 +390,12 @@ sub drop {
 
 sub mypop {
   my($self, $key) = @_;
-  if (!$key) {
-    return $self->fail("<key> parameter missing\n");
-  }
+
+  return $self->_failkey() if(! defined $key);
 
   if (exists $self->{db}->{$key}) {
     if (ref($self->{db}->{$key}) !~ /array/i) {
-      return $self->fail("\"$key\" is not an array\n");
+      return $self->_fail("\"$key\" is not an array\n");
     }
   }
   my $ignore = pop @{$self->{db}->{$key}};
@@ -385,13 +406,12 @@ sub mypop {
 
 sub myshift {
   my($self, $key) = @_;
-  if (!$key) {
-    return $self->fail("<key> parameter missing\n");
-  }
+
+  return $self->_failkey() if(! defined $key);
 
   if (exists $self->{db}->{$key}) {
     if (ref($self->{db}->{$key}) !~ /array/i) {
-      return $self->fail("\"$key\" is not an array\n");
+      return $self->_fail("\"$key\" is not an array\n");
     }
   }
   my $ignore = shift @{$self->{db}->{$key}};
@@ -402,9 +422,8 @@ sub myshift {
 
 sub get {
   my($self, $key, $search) = @_;
-  if (!$key) {
-    return $self->fail("<key> parameter missing\n");
-  }
+
+  return $self->_failkey() if(! defined $key);
 
   my $out;
   my @K;
@@ -423,7 +442,7 @@ sub get {
       push @K, $key;
     }
     else {
-      return $self->fail("no such key: \"$key\"\n");
+      return $self->_fail("no such key: \"$key\"\n");
     }
   }
 
@@ -445,10 +464,10 @@ sub dump {
   my ($self, $obj, $noprint) = @_;
   my $out;
   if ($obj) {
-    $out = YAML::Dump($self->{export}->($obj));
+    $out = $self->{serialize}->($self->{export}->($obj));
   }
   else {
-    $out = YAML::Dump($self->{export}->($self->{db}));
+    $out = $self->{serialize}->($self->{export}->($self->{db}));
   }
 
   if ($noprint) {
@@ -469,12 +488,11 @@ sub dump {
 
 sub edit {
   my ($self, $key) = @_;
-  if (!$key) {
-    return $self->fail("<key> parameter missing\n");
-  }
+
+  return $self->_failkey() if(! defined $key);
 
   if (exists $self->{db}->{$key}) {
-    my $data = YAML::Dump($self->{export}->($self->{db}->{$key}));
+    my $data = $self->{serialize}->($self->{export}->($self->{db}->{$key}));
     my ($fh, $filename) = tempfile();
     print $fh $data;
     close $fh;
@@ -489,10 +507,10 @@ sub edit {
     else {
       my $perl;
       eval {
-	$perl = YAML::Load($newdata);
+	$perl = $self->{deserialize}->($newdata);
       };
       if ($@) {
-	return $self->fail("$@\n");
+	return $self->_fail("$@\n");
       }
       else {
 	$self->{db}->{$key} = $perl;
@@ -502,7 +520,7 @@ sub edit {
     unlink($filename);
   }
   else {
-    return $self->fail("no such key: \"$key\"\n");
+    return $self->_fail("no such key: \"$key\"\n");
   }
 
   return 1;
@@ -517,47 +535,76 @@ sub list {
 }
 
 sub show {
-  my $self = shift;
-  foreach my $key (sort keys %{$self->{db}}) {
-    printf "%-30s", $key;
-    if (ref($self->{db}->{$key}) =~ /hash/i) {
-	print "{ .. }\n";
+  my ($self, $indent) = @_;
+
+
+
+  if (ref($self->{db}) =~ /array/i) {
+    my $pos = 0;
+    foreach my $item (@{$self->{db}}) {
+      print "$pos:\n";
+      if (ref($item)) {
+	$self->_showhash($item, "    ");
       }
-    elsif (ref($self->{db}->{$key}) =~ /array/i) {
-      print "[ .. ]\n";
+      else {
+	print "   $item\n";
+      }
+      $pos++;
     }
-    else {
-      print "\"$self->{db}->{$key}\"\n";
-    }
+  }
+  else {
+    $self->_showhash($self->{db});
   }
 
   return 1;
 }
 
+sub _showhash {
+  my($self, $db, $indent) = @_;
+
+  if (!defined $indent) {
+    $indent = '';
+  }
+
+  foreach my $key (sort keys %{$db}) {
+    printf "%s%-30s", $indent, $key;
+    if (ref($db->{$key}) =~ /hash/i) {
+      print "{ .. }\n";
+    }
+    elsif (ref($db->{$key}) =~ /array/i) {
+      print "[ .. ]\n";
+    }
+    else {
+      print "\"$db->{$key}\"\n";
+    }
+  }
+}
+
 sub enter {
   my ($self, $key) = @_;
-  if (!$key) {
-    return $self->fail("<key> parameter missing\n");
-  }
+
+  return $self->_failkey() if(! defined $key);
 
   if ($key eq '..') {
     $self->up;
   }
   else {
-    if (exists $self->{db}->{$key}) {
-      if (ref($self->{db}->{$key}) =~ /hash/i) {
-	# "changedir" to the key
-	push @{$self->{prev}}, $self->{db};
-	push @{$self->{path}}, $key;
-	$self->{db} = $self->{db}->{$key};
-	print "=> $key\n";
-      }
-      else {
-	return $self->fail("not a hash: \"$key\"\n");
-      }
+    if (ref($self->{db}) =~ /array/i) {
+      # "cd" into array element
+      return $self->_fail("<key> must be a number, as we're inside an array\n") if($key !~ /^\d*$/);
+      push @{$self->{path}}, "[${key}]";
+      push @{$self->{prev}}, $self->{db};
+      $self->{db} = $self->{db}->[$key];
+    }
+    elsif (ref($self->{db}->{$key}) =~ /hash/i || ref($self->{db}->{$key}) =~ /array/i) {
+      # "cd" into the hash pointed at by $key
+      push @{$self->{prev}}, $self->{db};
+      push @{$self->{path}}, $key;
+      $self->{db} = $self->{db}->{$key};
+      print "=> $key\n";
     }
     else {
-      return $self->fail("unknown command \"$key\"\n");
+      return $self->_fail("not a hash: \"$key\"\n");
     }
   }
 
@@ -572,10 +619,56 @@ sub up {
     print "<=\n";
   }
   else {
-    return $self->fail("already on top level\n");
+    return $self->_fail("already on top level\n");
   }
 
   return 1;
+}
+
+sub search {
+  my ($self, $regex) = @_;
+
+  if (! defined $regex) {
+    $self->_fail("<regex> parameter missing\n");
+  }
+
+  $self->{spath} = [];
+
+  return $self->_search($self->{db}, $regex);
+}
+
+sub _search {
+  my($self, $db, $regex) = @_;
+
+  if (ref($db) =~ /hash/i) {
+    foreach my $key (sort keys %{$db}) {
+      $self->_searchmatch($key, $regex);
+      push @{$self->{spath}}, $key;
+      $self->_search($db->{$key}, $regex);
+      pop @{$self->{spath}};
+    }
+  }
+  elsif (ref($db) =~ /array/i) {
+    my $pos = 0;
+    foreach my $item (@{$db}) {
+      push @{$self->{spath}}, "[${pos}]";
+      $self->_search($item, $regex);
+      pop @{$self->{spath}};
+      $pos++;
+    }
+  }
+  else {
+    $self->_searchmatch($db, $regex);
+  }
+
+  return 1;
+}
+
+sub _searchmatch {
+  my ($self, $key, $regex) = @_;
+  if ($key =~ /$regex/) {
+    print join(' => ', @{$self->{spath}}) . ": $key\n";
+  }
 }
 
 sub done {
@@ -593,6 +686,7 @@ sub help {
   dump                  - dump everything from current level
   get <key> | /regex/   - display value of <key>, or the value
                           of all keys matching /regex/
+  search <regex>        - search for <regex>
 
 Navigation commands:
   enter <key>           - change level into sub-hash of <key>
@@ -627,6 +721,7 @@ Shortcuts:
   sh                    - show
   cd                    - enter
   <key>                 - enter <key> [2]
+  /<regex>              - search <regex>
 
 Hints:
 [1] <value> can be perl code, e.g: set pw { user => 'max' }
@@ -651,13 +746,15 @@ Data::Interactive::Inspect - Inspect and manipulate perl data structures interac
 
  # or
  my $shell = Data::Interactive::Inspect->new(
-   struct   => $data,
-   name     => 'verkehrswege',
-   begin    => sub { .. },
-   commit   => sub { .. },
-   rollback => sub { .. },
-   editor   => 'emacs',
-   more     => 'less'
+   struct      => $data,
+   name        => 'verkehrswege',
+   begin       => sub { .. },
+   commit      => sub { .. },
+   rollback    => sub { .. },
+   serialize   => sub { .. },
+   deserialize => sub { .. },
+   editor      => 'emacs',
+   more        => 'less'
  );
 
  $data = $shell->inspect(); # opens a shell and returns modified hash ref on quit
@@ -695,11 +792,25 @@ command. Use this parameter to instruct it otherwise.
 By default L<Data::Interactive::Inspect> uses B<more> to display data which doesn't
 fit the terminal window. Use this parameter to instruct it otherwise.
 
-=item B<begin> B<commit> B<rollback>
+=item B<begin>, B<commit>, B<rollback>
 
 If your data is tied to some backend which supports transactions, you can provide
 functions to implement this. If all three are defined, the user can use transaction
 commands in the shell.
+
+Look at L<DBM::Deep::Manager> for an example implementation.
+
+=item B<serialize>, B<deserialize>
+
+By default L<Data::Interactive::Inspect> uses L<YAML> for serialization, which
+is used in the B<edit> and B<dump> commands. You can change this by assigning
+code refs to these parameters.
+
+B<serialize> will be called with the structure to be serialized as its sole
+parameter and is expected to return a string.
+
+B<deserialize> will be called with a string as parameter and is expected to
+return a structure.
 
 =back
 
@@ -741,10 +852,18 @@ Dumps out everything of the current level of the structure.
 
 Shortcut: B<d>.
 
-=item B<get> key | /regex>
+=item B<get> key | /regex/>
 
 Displays the value of B<key>. If you specify a regex, the values of
 all matching keys will be shown.
+
+=item B<search> regex | /<regex>
+
+Search for B<regex> through the current structure. Looks for
+keys an values.
+
+Beware that this make take some time depending on the size
+of the structure.
 
 =back
 
@@ -946,6 +1065,6 @@ and/or modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-This is the manual page for L<Data::Interactive::Inspect> Version 0.02.
+This is the manual page for L<Data::Interactive::Inspect> Version 0.03.
 
 =cut
