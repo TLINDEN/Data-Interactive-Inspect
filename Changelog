@@ -1,3 +1,9 @@
+0.04
+	fixed drop/append/pop/shift commands to work inside
+	arrays as well.
+
+	fixed the quit command (it literally called 'exit')
+
 0.03
 	re-factored error handling a little
 

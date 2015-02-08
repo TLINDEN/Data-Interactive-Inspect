@@ -21,7 +21,7 @@ no strict 'refs';
 
 use Data::Dumper;
 
-$Data::Interactive::Inspect::VERSION = 0.03;
+$Data::Interactive::Inspect::VERSION = 0.04;
 
 use vars qw(@ISA);
 
@@ -131,6 +131,8 @@ sub new {
   # set to 1 if transactions supported and implemented
   $self->{session} = 0;
 
+  $self->{quit} = 0;
+
   return $self;
 }
 
@@ -169,6 +171,7 @@ sub inspect {
     my $prompt = $self->prompt;
     while ( defined ($_ = $term->readline($prompt)) ) {
       if (! $self->process($_) ) {
+	print "last\n";
 	last;
       }
       $prompt = $self->prompt;
@@ -284,6 +287,7 @@ sub process {
       }
       $r = $self->$func(@args);
       return 0 if($failonerr && !$r); # fail if not interactive
+      return 0 if($self->{quit}); # finish
     }
     else {
       if (ref($self->{db}) =~ /hash/i) {
@@ -321,8 +325,15 @@ sub _failkey {
   return $self->_fail("<key> parameter missing\n");
 }
 
+sub _failidx {
+  my $self = shift;
+  return $self->_fail("<key> must be a number, since we're inside an array\n");
+}
+
 sub quit {
-  exit;
+  my $self = shift;
+  $self->{quit} = 1;
+  return 0;
 }
 
 sub set {
@@ -350,22 +361,33 @@ sub set {
 sub append {
   my($self, $key, @value) = @_;
 
-  return $self->_failkey() if(! defined $key);
+  if (ref($self->{db}) !~ /array/i) {
+    return $self->_failkey() if(! defined $key);
 
-  if (exists $self->{db}->{$key}) {
-    if (ref($self->{db}->{$key}) !~ /array/i) {
-      return $self->_fail("\"$key\" already exists and is not an array\n");
+    if (exists $self->{db}->{$key}) {
+      if (ref($self->{db}->{$key}) !~ /array/i) {
+	return $self->_fail("\"$key\" already exists and is not an array\n");
+      }
     }
+  }
+  else {
+    # inside an array, ignore $key
+    @value = ($key, @value);
   }
 
   my $var;
   my $code = "\$var = @value;";
   eval $code;
   if ($@) {
-    return $self->_fail("failed to insert: $@\n");
+    return $self->_fail("failed to evaluate: $@\n");
   }
   else {
-    push @{$self->{db}->{$key}}, $var;
+    if (ref($self->{db}) =~ /array/i) {
+      push @{$self->{db}}, $var;
+    }
+    else {
+      push @{$self->{db}->{$key}}, $var;
+    }
     $self->done;
   }
 
@@ -375,14 +397,26 @@ sub append {
 sub drop {
   my($self, $key) = @_;
 
-  return $self->_failkey() if(! defined $key);
-
-  if (exists $self->{db}->{$key}) {
-    delete $self->{db}->{$key};
-    $self->done;
+  if (ref($self->{db}) =~ /array/i) {
+    return $self->_failidx if($key !~ /^\d*$/);
+    if (scalar @{$self->{db}} -1 < $key) {
+      return $self->_fail("array element $key exceeds number of elements in current array\n");
+    }
+    else {
+      splice @{$self->{db}}, $key, 1;
+      $self->done;
+    }
   }
   else {
-    return $self->_fail("no such key: \"$key\"\n");
+    return $self->_failkey() if(! defined $key);
+
+    if (exists $self->{db}->{$key}) {
+      delete $self->{db}->{$key};
+      $self->done;
+    }
+    else {
+      return $self->_fail("no such key: \"$key\"\n");
+    }
   }
 
   return 1;
@@ -391,15 +425,20 @@ sub drop {
 sub mypop {
   my($self, $key) = @_;
 
-  return $self->_failkey() if(! defined $key);
+  if (ref($self->{db}) !~ /array/i) {
+    return $self->_failkey() if(! defined $key);
 
-  if (exists $self->{db}->{$key}) {
-    if (ref($self->{db}->{$key}) !~ /array/i) {
-      return $self->_fail("\"$key\" is not an array\n");
+    if (exists $self->{db}->{$key}) {
+      if (ref($self->{db}->{$key}) !~ /array/i) {
+	return $self->_fail("\"$key\" is not an array\n");
+      }
     }
+    my $ignore = pop @{$self->{db}->{$key}};
+    $self->done;
   }
-  my $ignore = pop @{$self->{db}->{$key}};
-  $self->done;
+  else {
+    my $ignore = pop @{$self->{db}};
+  }
 
   return 1;
 }
@@ -407,16 +446,20 @@ sub mypop {
 sub myshift {
   my($self, $key) = @_;
 
-  return $self->_failkey() if(! defined $key);
+  if (ref($self->{db}) !~ /array/i) {
+    return $self->_failkey() if(! defined $key);
 
-  if (exists $self->{db}->{$key}) {
-    if (ref($self->{db}->{$key}) !~ /array/i) {
-      return $self->_fail("\"$key\" is not an array\n");
+    if (exists $self->{db}->{$key}) {
+      if (ref($self->{db}->{$key}) !~ /array/i) {
+	return $self->_fail("\"$key\" is not an array\n");
+      }
     }
+    my $ignore = shift @{$self->{db}->{$key}};
+    $self->done;
   }
-  my $ignore = shift @{$self->{db}->{$key}};
-  $self->done;
-
+  else {
+    my $ignore = shift @{$self->{db}};
+  }
   return 1;
 }
 
@@ -438,7 +481,16 @@ sub get {
     }
   }
   else {
-    if (exists $self->{db}->{$key}) {
+    if (ref($self->{db}) =~ /array/i) {
+      return $self->_failidx if($key !~ /^\d*$/);
+      if (scalar @{$self->{db}} -1 < $key) {
+	return $self->_fail("array element $key exceeds number of elements in current array\n");
+      }
+      else {
+	$out .= "[$key] =>\n" . $self->dump($self->{db}->[$key], 1)
+      }
+    }
+    elsif (exists $self->{db}->{$key}) {
       push @K, $key;
     }
     else {
@@ -591,7 +643,7 @@ sub enter {
   else {
     if (ref($self->{db}) =~ /array/i) {
       # "cd" into array element
-      return $self->_fail("<key> must be a number, as we're inside an array\n") if($key !~ /^\d*$/);
+      return $self->_failidx if($key !~ /^\d*$/);
       push @{$self->{path}}, "[${key}]";
       push @{$self->{prev}}, $self->{db};
       $self->{db} = $self->{db}->[$key];
@@ -694,10 +746,13 @@ Navigation commands:
 Edit commands:
   set <key> <value>     - set <key> to <value>
   edit <key>            - edit structure behind <key> [1]
-  append <key> <value>  - append <value> to array <key>
-  drop <key>            - delete key <key>
-  pop <key>             - remove last element of array <key>
-  shift <key>           - remove first element of array <key>
+  append [<key>] <value>- append <value> to array <key>, leave <key>
+                          if you are currently inside an array
+  drop <key>            - delete key <key>, use a number if inside
+                          an array
+  pop [<key>]           - remove last element of array <key>,
+  shift [<key>]         - remove first element of array <key>
+                          leave <key> if inside an array
 );
 
   if ($self->{transactions}) {
@@ -765,18 +820,23 @@ Data::Interactive::Inspect - Inspect and manipulate perl data structures interac
 This module provides an interactive shell which can be used to inspect and modify
 a perl data structure.
 
+You can browse the structure like a directory, display the contents, add and remove
+items, whatever you like. It is possible to include complete perl data structures.
+
+The module works with hash and array references.
+
 =head1 METHODS
 
 =head2 new
 
-The B<new()> function takes either one parameter (a hash reference) or a hash reference
-with parameters. The following parameters are supported:
+The B<new()> function takes either one parameter (a reference to a hash or array)
+or a hash reference with parameters. The following parameters are supported:
 
 =over
 
 =item B<struct>
 
-The hash reference to inspect.
+The hash or array reference to inspect.
 
 =item B<name>
 
@@ -844,6 +904,8 @@ keys. If a key points to a structure (like a hash or an array), B<show>
 whill not display anything of it, but instead indicate, that there'e
 more behind that key.
 
+For arrays the array indices are displayed as well.
+
 Shortcut: B<sh>.
 
 =item B<dump>
@@ -856,6 +918,9 @@ Shortcut: B<d>.
 
 Displays the value of B<key>. If you specify a regex, the values of
 all matching keys will be shown.
+
+If the current structure is an array you can specify the array index
+as the parameter.
 
 =item B<search> regex | /<regex>
 
@@ -889,6 +954,9 @@ front of it, eg:
  my.db subhash> dump
  my.db subhash> ..
  my.db>^D
+
+If the current structure is an array you can use the array index
+to enter a specific array item.
 
 If you specify B<..> as parameter (or as its own command like in the
 example below), you go one level up and leave the current sub hash.
@@ -931,6 +999,8 @@ be saved to the database.
 This command can be used to append a value to an array. As with the
 B<set> command, B<value> can be any valid perl structure.
 
+If you are currently inside an array, leave the B<key> parameter.
+
 =item B<drop> key
 
 Delete a key.
@@ -938,13 +1008,20 @@ Delete a key.
 Again, note that all commands are executed without further asking
 or warning!
 
+If you are currently inside an array, the B<key> parameter must be
+an array index.
+
 =item B<pop> key
 
 Remove the last element of the array pointed at by B<key>.
 
+If you are currently inside an array, leave the B<key> parameter.
+
 =item B<shift> key
 
 Remove the first element of the array pointed at by B<key>.
+
+If you are currently inside an array, leave the B<key> parameter.
 
 =back
 
@@ -1065,6 +1142,6 @@ and/or modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-This is the manual page for L<Data::Interactive::Inspect> Version 0.03.
+This is the manual page for L<Data::Interactive::Inspect> Version 0.04.
 
 =cut
