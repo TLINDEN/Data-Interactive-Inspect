@@ -21,7 +21,7 @@ no strict 'refs';
 
 use Data::Dumper;
 
-$Data::Interactive::Inspect::VERSION = 0.04;
+$Data::Interactive::Inspect::VERSION = 0.05;
 
 use vars qw(@ISA);
 
@@ -694,7 +694,7 @@ sub _search {
 
   if (ref($db) =~ /hash/i) {
     foreach my $key (sort keys %{$db}) {
-      $self->_searchmatch($key, $regex);
+      $self->_searchmatch($key, $regex, 0);
       push @{$self->{spath}}, $key;
       $self->_search($db->{$key}, $regex);
       pop @{$self->{spath}};
@@ -710,16 +710,17 @@ sub _search {
     }
   }
   else {
-    $self->_searchmatch($db, $regex);
+    $self->_searchmatch($db, $regex, 1);
   }
 
   return 1;
 }
 
 sub _searchmatch {
-  my ($self, $key, $regex) = @_;
+  my ($self, $key, $regex, $quote) = @_;
+  $quote = $quote ? '"' : ''; 
   if ($key =~ /$regex/) {
-    print join(' => ', @{$self->{spath}}) . ": $key\n";
+    print join(' => ', @{$self->{spath}}) . ": ${quote}$ {key}${quote}\n";
   }
 }
 
@@ -1142,6 +1143,6 @@ and/or modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-This is the manual page for L<Data::Interactive::Inspect> Version 0.04.
+This is the manual page for L<Data::Interactive::Inspect> Version 0.05.
 
 =cut
