@@ -1,4 +1,9 @@
-NEXT
+0.06
+	fixed crash, which happened when one executed the
+	'list' command if inside an array. now we divert
+	to 'show' in such a case.
+
+0.05
 	signal value matches in search with quotes
 
 0.04

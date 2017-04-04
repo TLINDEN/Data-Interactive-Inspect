@@ -44,7 +44,7 @@ BUGS
        http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Data::Interactive::Inspect
 
 COPYRIGHT
-       Copyright (c) 2015 by T.v.Dein <tlinden@cpan.org>.  All rights
+       Copyright (c) 2015-2017 by T.v.Dein <tlinden@cpan.org>.  All rights
        reserved.
 
 LICENSE
@@ -52,4 +52,4 @@ LICENSE
        under the same terms as Perl itself.
 
 VERSION
-       This is the manual page for Data::Interactive::Inspect Version 0.01.
+       This is the manual page for Data::Interactive::Inspect Version 0.06.

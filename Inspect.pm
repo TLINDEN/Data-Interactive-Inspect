@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 #
-# Copyright (c) 2015 T.v.Dein <tlinden |AT| cpan.org>.
-# All Rights Reserved. Std. disclaimer applies.
-# Artistic License, same as perl itself. Have fun.
+# Copyright  (c)  2015-2017  T.v.Dein <tlinden  |AT|  cpan.org>.   All
+# Rights Reserved. Std. disclaimer applies.  Artistic License, same as
+# perl itself. Have fun.
 #
 
 
@@ -21,7 +21,7 @@ no strict 'refs';
 
 use Data::Dumper;
 
-$Data::Interactive::Inspect::VERSION = 0.05;
+$Data::Interactive::Inspect::VERSION = 0.06;
 
 use vars qw(@ISA);
 
@@ -39,18 +39,18 @@ sub new {
 
   # defaults (= valid parameters)
   my $self = {
-	      name        => '',
-	      begin       => sub { print STDERR "unsupported\n"; },
-	      commit      => sub { print STDERR "unsupported\n"; },
-	      rollback    => sub { print STDERR "unsupported\n"; },
-	      export      => sub { my ($db) = @_; return $db; },
-	      serialize   => sub { my $db = shift; return YAML::Dump($db); },
-	      deserialize => sub { my $db = shift; return YAML::Load($db); },
-	      struct      => {},
-	      editor      => 'vi',
-	      more        => 'more',
-	      silent      => 0,
-	     };
+              name        => '',
+              begin       => sub { print STDERR "unsupported\n"; },
+              commit      => sub { print STDERR "unsupported\n"; },
+              rollback    => sub { print STDERR "unsupported\n"; },
+              export      => sub { my ($db) = @_; return $db; },
+              serialize   => sub { my $db = shift; return YAML::Dump($db); },
+              deserialize => sub { my $db = shift; return YAML::Load($db); },
+              struct      => {},
+              editor      => 'vi',
+              more        => 'more',
+              silent      => 0,
+             };
 
   bless $self, $class;
 
@@ -62,7 +62,7 @@ sub new {
     my %p = @param;
     foreach my $k (keys %{$self}) {
       if (exists $p{$k}) {
-	$self->{$k} = $p{$k};
+        $self->{$k} = $p{$k};
       }
     }
     if (exists $p{begin} && $p{commit} && $p{rollback}) {
@@ -82,35 +82,35 @@ sub new {
 
   # map commands+shortcuts to functions
   $self->{command} = {
-		      l     => 'list',
-		      list  => 'list',
-		      show  => 'show',
-		      sh    => 'show',
-		      dump  => 'dump',
-		      d     => 'dump',
-		      get   => 'get',
-		      g     => 'get',
-		      enter => 'enter',
-		      cd    => 'enter',
-		      set   => 'set',
-		      edit  => 'edit',
-		      e     => 'edit',
-		      append=> 'append',
-		      drop  => 'drop',
-		      pop   => 'mypop',
-		      shift => 'myshift',
-		      search=> 'search',
-		      '/'   => 'search',
-		      help  => 'help',
-		      h     => 'help',
-		      '?'   => 'help',
-		      quit  => 'quit',
-		      q     => 'quit',
-		     };
+                      l     => 'list',
+                      list  => 'list',
+                      show  => 'show',
+                      sh    => 'show',
+                      dump  => 'dump',
+                      d     => 'dump',
+                      get   => 'get',
+                      g     => 'get',
+                      enter => 'enter',
+                      cd    => 'enter',
+                      set   => 'set',
+                      edit  => 'edit',
+                      e     => 'edit',
+                      append=> 'append',
+                      drop  => 'drop',
+                      pop   => 'mypop',
+                      shift => 'myshift',
+                      search=> 'search',
+                      '/'   => 'search',
+                      help  => 'help',
+                      h     => 'help',
+                      '?'   => 'help',
+                      quit  => 'quit',
+                      q     => 'quit',
+                     };
 
   if ($self->{transactions}) {
     # map if supported
-    foreach my $c(qw(begin commit rollback)) {
+    foreach my $c (qw(begin commit rollback)) {
       $self->{command}->{$c} = $c;
     }
   }
@@ -147,7 +147,7 @@ sub inspect {
     $self->{silent} = 1;
     foreach (split /\n/, $__cmds) {
       if (! $self->process($_, 1) ) {
-	last;
+        last;
       }
     }
     return $self->{struct};
@@ -171,8 +171,8 @@ sub inspect {
     my $prompt = $self->prompt;
     while ( defined ($_ = $term->readline($prompt)) ) {
       if (! $self->process($_) ) {
-	print "last\n";
-	last;
+        print "last\n";
+        last;
       }
       $prompt = $self->prompt;
     }
@@ -180,7 +180,7 @@ sub inspect {
   else {
     while (<STDIN>) {
       if (! $self->process($_, 1) ) {
-	last;
+        last;
       }
     }
   }
@@ -213,19 +213,19 @@ sub complete {
   if ($start == 0) {
     # match on a command
     @matches = $self->{term}->completion_matches ($begin, sub {
-						    my ($text, $state) = @_;
-						    my @name = @{$self->{complete_words}};
-						    unless ($state) {
-						      $self->{complete_idx} = 0;
-						    }
-						    while ($self->{complete_idx} <= $#name) {
-						      $self->{complete_idx}++;
-						      return $name[$self->{complete_idx} - 1]
-							if ($name[$self->{complete_idx} - 1] =~ /^$text/);
-						    }
-						    # no match
-						    return undef;
-						  });
+                                                    my ($text, $state) = @_;
+                                                    my @name = @{$self->{complete_words}};
+                                                    unless ($state) {
+                                                      $self->{complete_idx} = 0;
+                                                    }
+                                                    while ($self->{complete_idx} <= $#name) {
+                                                      $self->{complete_idx}++;
+                                                      return $name[$self->{complete_idx} - 1]
+                                                        if ($name[$self->{complete_idx} - 1] =~ /^$text/);
+                                                    }
+                                                    # no match
+                                                    return undef;
+                                                  });
   }
   elsif ($line =~ /[^\s]+\s+[^\s]+\s+/) {
     # command line is complete ($cmd $arg), stop with completion
@@ -236,19 +236,19 @@ sub complete {
     if (grep {$cmd eq $_} @{$self->{commandargs}}) {
       # only match for commands which support args
       @matches = $self->{term}->completion_matches ($begin, sub {
-						    my ($text, $state) = @_;
-						    my @name = keys %{$self->{db}};
-						    unless ($state) {
-						      $self->{complete_idxp} = 0;
-						    }
-						    while ($self->{complete_idxp} <= $#name) {
-						      $self->{complete_idxp}++;
-						      return $name[$self->{complete_idxp} - 1]
-							if ($name[$self->{complete_idxp} - 1] =~ /^$text/);
-						    }
-						    # no match
-						    return undef;
-						  });
+                                                      my ($text, $state) = @_;
+                                                      my @name = keys %{$self->{db}};
+                                                      unless ($state) {
+                                                        $self->{complete_idxp} = 0;
+                                                      }
+                                                      while ($self->{complete_idxp} <= $#name) {
+                                                        $self->{complete_idxp}++;
+                                                        return $name[$self->{complete_idxp} - 1]
+                                                          if ($name[$self->{complete_idxp} - 1] =~ /^$text/);
+                                                      }
+                                                      # no match
+                                                      return undef;
+                                                    });
     }
     else {
       # command doesn't support args
@@ -283,26 +283,26 @@ sub process {
     if (exists $self->{command}->{$cmd}) {
       my $func = $self->{command}->{$cmd};
       if (! grep {$cmd eq $_} @{$self->{commandargs}}) {
-	@args = ();
+        @args = ();
       }
       $r = $self->$func(@args);
       return 0 if($failonerr && !$r); # fail if not interactive
-      return 0 if($self->{quit}); # finish
+      return 0 if($self->{quit});     # finish
     }
     else {
       if (ref($self->{db}) =~ /hash/i) {
-	if (exists $self->{db}->{$cmd}) {
-	  $r = $self->enter($cmd);
-	  return 0 if($failonerr && !$r); # fail if not interactive
-	}
-	else {
-	  print STDERR "no such command: $cmd\n";
-	  return 0 if $failonerr;
-	}
+        if (exists $self->{db}->{$cmd}) {
+          $r = $self->enter($cmd);
+          return 0 if($failonerr && !$r); # fail if not interactive
+        }
+        else {
+          print STDERR "no such command: $cmd\n";
+          return 0 if $failonerr;
+        }
       }
       else {
-	print STDERR "no such command: $cmd\n";
-	return 0 if $failonerr;
+        print STDERR "no such command: $cmd\n";
+        return 0 if $failonerr;
       }
     }
   }
@@ -366,7 +366,7 @@ sub append {
 
     if (exists $self->{db}->{$key}) {
       if (ref($self->{db}->{$key}) !~ /array/i) {
-	return $self->_fail("\"$key\" already exists and is not an array\n");
+        return $self->_fail("\"$key\" already exists and is not an array\n");
       }
     }
   }
@@ -430,7 +430,7 @@ sub mypop {
 
     if (exists $self->{db}->{$key}) {
       if (ref($self->{db}->{$key}) !~ /array/i) {
-	return $self->_fail("\"$key\" is not an array\n");
+        return $self->_fail("\"$key\" is not an array\n");
       }
     }
     my $ignore = pop @{$self->{db}->{$key}};
@@ -451,7 +451,7 @@ sub myshift {
 
     if (exists $self->{db}->{$key}) {
       if (ref($self->{db}->{$key}) !~ /array/i) {
-	return $self->_fail("\"$key\" is not an array\n");
+        return $self->_fail("\"$key\" is not an array\n");
       }
     }
     my $ignore = shift @{$self->{db}->{$key}};
@@ -476,7 +476,7 @@ sub get {
     $key =~ s#/$##;
     foreach my $k (keys %{$self->{db}}) {
       if ($k =~ /$key/) {
-	push @K, $k;
+        push @K, $k;
       }
     }
   }
@@ -484,10 +484,10 @@ sub get {
     if (ref($self->{db}) =~ /array/i) {
       return $self->_failidx if($key !~ /^\d*$/);
       if (scalar @{$self->{db}} -1 < $key) {
-	return $self->_fail("array element $key exceeds number of elements in current array\n");
+        return $self->_fail("array element $key exceeds number of elements in current array\n");
       }
       else {
-	$out .= "[$key] =>\n" . $self->dump($self->{db}->[$key], 1)
+        $out .= "[$key] =>\n" . $self->dump($self->{db}->[$key], 1)
       }
     }
     elsif (exists $self->{db}->{$key}) {
@@ -559,14 +559,14 @@ sub edit {
     else {
       my $perl;
       eval {
-	$perl = $self->{deserialize}->($newdata);
+        $perl = $self->{deserialize}->($newdata);
       };
       if ($@) {
-	return $self->_fail("$@\n");
+        return $self->_fail("$@\n");
       }
       else {
-	$self->{db}->{$key} = $perl;
-	$self->done;
+        $self->{db}->{$key} = $perl;
+        $self->done;
       }
     }
     unlink($filename);
@@ -580,8 +580,15 @@ sub edit {
 
 sub list {
   my $self = shift;
-  print join "\n", sort keys %{$self->{db}};
-  print "\n";
+
+  if (ref($self->{db}) eq 'ARRAY') {
+    # already implements array listing
+    $self->show;
+  }
+  else {
+    print join "\n", sort keys %{$self->{db}};
+    print "\n";
+  }
 
   return 1;
 }
@@ -589,17 +596,15 @@ sub list {
 sub show {
   my ($self, $indent) = @_;
 
-
-
   if (ref($self->{db}) =~ /array/i) {
     my $pos = 0;
     foreach my $item (@{$self->{db}}) {
       print "$pos:\n";
       if (ref($item)) {
-	$self->_showhash($item, "    ");
+        $self->_showhash($item, "    ");
       }
       else {
-	print "   $item\n";
+        print "   $item\n";
       }
       $pos++;
     }
@@ -718,7 +723,7 @@ sub _search {
 
 sub _searchmatch {
   my ($self, $key, $regex, $quote) = @_;
-  $quote = $quote ? '"' : ''; 
+  $quote = $quote ? '"' : '';
   if ($key =~ /$regex/) {
     print join(' => ', @{$self->{spath}}) . ": ${quote}$ {key}${quote}\n";
   }
@@ -1072,9 +1077,9 @@ contain code refs. That's not a problem as long as you don't touch them.
 Sample:
 
  my $c = {
-	 opt => 'value',
-	 hook => sub { return 1; },
-	};
+     opt => 'value',
+     hook => sub { return 1; },
+    };
  my $shell = Data::Interactive::Inspect->new($c);
  $shell->inspect();
 
@@ -1133,8 +1138,8 @@ http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Data::Interactive::Inspect
 
 =head1 COPYRIGHT
 
-Copyright (c) 2015 by T.v.Dein <tlinden@cpan.org>.
-All rights reserved.
+Copyright (c)  2015-2017 by  T.v.Dein <tlinden@cpan.org>.   All rights
+reserved.
 
 =head1 LICENSE
 
@@ -1143,6 +1148,6 @@ and/or modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-This is the manual page for L<Data::Interactive::Inspect> Version 0.05.
+This is the manual page for L<Data::Interactive::Inspect> Version 0.06.
 
 =cut
