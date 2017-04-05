@@ -1,3 +1,6 @@
+0.07
+	added |more support to list and show commands.
+
 0.06
 	fixed crash, which happened when one executed the
 	'list' command if inside an array. now we divert
