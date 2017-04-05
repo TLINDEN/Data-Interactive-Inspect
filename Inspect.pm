@@ -21,7 +21,7 @@ no strict 'refs';
 
 use Data::Dumper;
 
-$Data::Interactive::Inspect::VERSION = 0.06;
+$Data::Interactive::Inspect::VERSION = 0.07;
 
 use vars qw(@ISA);
 
@@ -330,6 +330,17 @@ sub _failidx {
   return $self->_fail("<key> must be a number, since we're inside an array\n");
 }
 
+sub _more {
+  my ($self, $out) = @_;
+  if (open LESS, "|$self->{more}") {
+    print LESS $out;
+    close LESS;
+  }
+  else {
+    print $out;
+  }
+}
+
 sub quit {
   my $self = shift;
   $self->{quit} = 1;
@@ -526,13 +537,7 @@ sub dump {
     return $out;
   }
   else {
-    if (open LESS, "|$self->{more}") {
-      print LESS $out;
-      close LESS;
-    }
-    else {
-      print $out;
-    }
+    $self->_more($out);
   }
 
   return 1;
@@ -586,8 +591,8 @@ sub list {
     $self->show;
   }
   else {
-    print join "\n", sort keys %{$self->{db}};
-    print "\n";
+    my $out = join("\n", sort keys %{$self->{db}}) . "\n";
+    $self->_more($out);
   }
 
   return 1;
@@ -595,23 +600,26 @@ sub list {
 
 sub show {
   my ($self, $indent) = @_;
+  my $out;
 
   if (ref($self->{db}) =~ /array/i) {
     my $pos = 0;
     foreach my $item (@{$self->{db}}) {
-      print "$pos:\n";
+      $out .= "$pos:\n";
       if (ref($item)) {
-        $self->_showhash($item, "    ");
+        $out .= $self->_showhash($item, "    ");
       }
       else {
-        print "   $item\n";
+        $out .= "   $item\n";
       }
       $pos++;
     }
   }
   else {
-    $self->_showhash($self->{db});
+    $out = $self->_showhash($self->{db});
   }
+
+  $self->_more($out);
 
   return 1;
 }
@@ -623,18 +631,21 @@ sub _showhash {
     $indent = '';
   }
 
+  my $out;
   foreach my $key (sort keys %{$db}) {
-    printf "%s%-30s", $indent, $key;
+    $out .= sprintf "%s%-30s", $indent, $key;
     if (ref($db->{$key}) =~ /hash/i) {
-      print "{ .. }\n";
+      $out .= "{ .. }\n";
     }
     elsif (ref($db->{$key}) =~ /array/i) {
-      print "[ .. ]\n";
+      $out .= "[ .. ]\n";
     }
     else {
-      print "\"$db->{$key}\"\n";
+      $out .= "\"$db->{$key}\"\n";
     }
   }
+
+  return $out;
 }
 
 sub enter {
@@ -1148,6 +1159,6 @@ and/or modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-This is the manual page for L<Data::Interactive::Inspect> Version 0.06.
+This is the manual page for L<Data::Interactive::Inspect> Version 0.07.
 
 =cut
