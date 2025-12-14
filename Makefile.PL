@@ -24,7 +24,7 @@ WriteMakefile(
 	      test         => { TESTS => 't/*.t' },
               'META_MERGE' => {
                                resources => {
-                                             repository => 'https://github.com/TLINDEN/Data-Interactive-Inspect',
+                                             repository => 'https://codeberg.org/scip/Data-Interactive-Inspect',
                                             },
                               },
 

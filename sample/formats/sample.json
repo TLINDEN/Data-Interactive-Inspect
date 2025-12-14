@@ -41,7 +41,7 @@
    "release_status" : "stable",
    "resources" : {
       "repository" : {
-         "url" : "https://github.com/TLINDEN/Data-Interactive-Inspect"
+         "url" : "https://codeberg.org/scip/Data-Interactive-Inspect"
       }
    },
    "version" : 0.06,
